@@ -15,7 +15,8 @@ def naive_0(PANEL,
             c1=1,
             c2=1,
             c3=1,
-            c4=0):
+            c4=0,
+            c5=0):
     """ perform k-means++ with an L1 distance
     Args:
         trajs: trajectories list
@@ -46,7 +47,7 @@ def naive_0(PANEL,
         pth = centers_proc[labels[i]]
         labels_proc[i] = [pth]
 
-    stc_iter = Stc(c1=c1,c2=c2,c3=c3,c4=c4,panel=PANEL,pathlets=centers_proc,assignments=labels_proc) 
+    stc_iter = Stc(c1=c1,c2=c2,c3=c3,c4=c4,c5=c5,panel=PANEL,pathlets=centers_proc,assignments=labels_proc) 
 
     stc_iter.genSuperPathlets() #generate superpathlets
 
@@ -60,7 +61,8 @@ def naive_1(PANEL,
             c1=1,
             c2=1,
             c3=1,
-            c4=0):
+            c4=0,
+            c5=0):
     """ perform k-means++ with an L1 distance on various values of k, and pick the value that minimises the objective function
     Args:
         trajs: trajectories list
@@ -70,7 +72,7 @@ def naive_1(PANEL,
     """
 
     current_loss = math.inf
-    best_stc = []
+    best_stc = None
 
     for k in k_list:
         
@@ -79,7 +81,8 @@ def naive_1(PANEL,
                            c1=c1,
                            c2=c2,
                            c3=c3,
-                           c4=c4) 
+                           c4=c4,
+                           c5=c5) 
         
         if stc_iter.loss() < current_loss:
             current_loss = stc_iter.loss() 
@@ -129,7 +132,7 @@ def naive_2(PANEL,
             current_loss = new_loss
 
     return(current_res)
-        #turn into stc_obj
+    #turn into stc_obj
 
 
 def naive_3(PANEL,
@@ -139,9 +142,11 @@ def naive_3(PANEL,
             c2=1,
             c3=1,
             c4=0,
+            c5=0,
             greedy_in_period = False): #if true, only apply c1 within periods, not that the end
     """
-    Naive 3 - clusters different segments. Does not mwerge across segments
+    Naive 3 - clusters different segments. Does not merge across segments. Iterates for different segment lengths to find optimal soln
+    if greedy_in_period is set to true, it will optimise cost in each period, including cost of more pathlets (not across periods)
 
     Args:
         trajs: trajectories list
@@ -204,11 +209,15 @@ def naive_3(PANEL,
 
         if greedy_in_period == True: #if greedy in period is true, we don't want to double penalise lots of pathlets across rounds...
         # ... as it is already taken into account by naive 1 in period. It will be set to false if naive 3 is called alone 
+            c1_aug = 0
             c4_aug = 0
+            c5_aug = 0
         else:
+            c1_aug=c1
             c4_aug=c4
+            c5_aug=c5
 
-        stc_iter = Stc(c1=c1,c2=c2,c3=c3,c4=c4_aug,panel=PANEL,pathlets=pathlet_seg_iter,assignments=assign_seg_iter) 
+        stc_iter = Stc(c1=c1_aug,c2=c2,c3=c3,c4=c4_aug,c5=c5_aug,panel=PANEL,pathlets=pathlet_seg_iter,assignments=assign_seg_iter) 
         loss_iter_ = stc_iter.loss()
         #print(loss_iter_)
         if loss_iter_ < best_loss_:
@@ -219,7 +228,7 @@ def naive_3(PANEL,
     best_stc_.genSuperPathlets()
 
     return(best_stc_)
-        #turn into stc_obj
+    #turn into stc_obj
         
 
 
@@ -232,7 +241,8 @@ def greedy1(PANEL,
             c1=1,
             c2=1,
             c3=1,
-            c4=0):
+            c4=1,
+            c5=1):
     """
     Naive 3, with greedy merges of pathlets
 
@@ -254,9 +264,10 @@ def greedy1(PANEL,
             c1=0,
             c2=c2,
             c3=c3,
-            c4=0) #run naive 3, but set c1 (number of paths) and c4 (switches) to zero
+            c4=0,
+            c5=0) #run naive 3, but set c1 (number of paths) and c4 (switches) to zero, c5 (number of pathlets)
 
-    res.updateParams(c1_=c1,c2_=c2,c3_=c3,c4_=c4) # update parameters 
+    res.updateParams(c1_=c1,c2_=c2,c3_=c3,c4_=c4,c5_=c5) # update parameters 
 
     pathlet_bounds = copy.deepcopy(list(set([ i.bounds for i in res.pathlets]))) #list of bounds for pathlets to consider, deep copy and bounds may change
     pathlet_bounds.sort() # sort list
@@ -276,7 +287,7 @@ def greedy1(PANEL,
             meet_point = bounds_start[1]
             if meet_point != bounds_end[0]:
                 print("error, not valid breakpoint")
-            print("bounds: (%d,%d)" % (bounds_start[0],bounds_start[1]))
+            #print("bounds: (%d,%d)" % (bounds_start[0],bounds_start[1]))
             pathlets_start = [ i for i in res.pathlets if i.bounds[1] == meet_point ]
             pathlets_end = [ i for i in res.pathlets if i.bounds[0] == meet_point ]
 
@@ -314,7 +325,35 @@ def greedy1(PANEL,
     return(res)
 
 
+
+def greedy1_1(PANEL,
+            k_list,
+            seg_list,
+            c1=1,
+            c2=1,
+            c3=1,
+            c4=1,
+            c5=1):
+    """ like greedy, but loops through values of k"""
+
+    current_loss = math.inf
+    best_stc = None
+
+    for k in k_list:
+        stc_iter = greedy1(copy.deepcopy(PANEL),
+                           k_list=[k],
+                           seg_list=seg_list,
+                           c1=c1,
+                           c2=c2,
+                           c3=c3,
+                           c4=c4,
+                           c5=c5)
+        
+        if stc_iter.loss() < current_loss:
+            current_loss = stc_iter.loss() 
+            best_stc = stc_iter
     
+    return(best_stc)
 
 
 
@@ -327,7 +366,8 @@ def greedy2(PANEL,
             c1=1,
             c2=1,
             c3=1,
-            c4=0):
+            c4=1,
+            c5=1):
     """ Greedy 1, but with multiple splits
     Works for multiple inputs of K
 
@@ -369,22 +409,13 @@ def greedy2(PANEL,
             meet_point = bounds_start[1]
             if meet_point != bounds_end[0]:
                 print("error, not valid breakpoint")
-            print("bounds: (%d,%d)" % (bounds_start[0],bounds_start[1]))
+            #print("bounds: (%d,%d)" % (bounds_start[0],bounds_start[1]))
             pathlets_start = [ i for i in res.pathlets if i.bounds[1] == meet_point ]
             pathlets_end = [ i for i in res.pathlets if i.bounds[0] == meet_point ]
 
             #for each pair of clusters between segments, find the similarity
+            res.mergePathlets2(left_paths=pathlets_start,right_paths=pathlets_end,bounds = bounds_end)
 
-            #a) calculate goodness of each new path
-            #b) if goodness is good enough - add it 
-            #c) next recalc goodness other new paths - if good enough, add. Continue
-            #d) add new paths to res. may want to kill existing paths
-
-            #e) new error term: total_path costs
-            
-            
-            
-            
         #finally, generate superpaths
         res.genSuperPathlets()
                 
@@ -401,10 +432,9 @@ def greedy3(PANEL,
             c1=1,
             c2=1,
             c3=1,
-            c4=0):
-    """ Greedy 1, but with multiple splits
-    Works for multiple inputs of K
-    And iterates for different seg splits
+            c4=0,
+            c5=0):
+    """ Greedy 2, but iterates through segment splits at the end - run greedy 2 on a fix segment split, record results, and moves on
 
     Args:
         trajs: trajectories list
@@ -414,8 +444,24 @@ def greedy3(PANEL,
         sub-time series clustering object
     """
 
+    current_loss = math.inf
+    best_stc = None
 
-    pass
+    for seg in seg_list:
+        stc_iter = greedy2(copy.deepcopy(PANEL),
+                           k_list=k_list,
+                           seg_list=[seg],
+                           c1=c1,
+                           c2=c2,
+                           c3=c3,
+                           c4=c4,
+                           c5=c5)
+        
+        if stc_iter.loss() < current_loss:
+            current_loss = stc_iter.loss() 
+            best_stc = stc_iter
+    
+    return(best_stc)
 
 
 ### things to add

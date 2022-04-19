@@ -3,6 +3,8 @@ import copy
 import math
 import itertools
 
+import numpy as np
+
 
 
 
@@ -117,27 +119,6 @@ class traj(object):
 
 
 
-class subTraj(object):
-    """ A class representing a subtrajectory.
-    
-    Exactly identical to a pathlet class. Defined as a class of its own for conceptual reasons.
-    """
-    
-    def __init__(self, trajID, bounds):
-        self.trajID = trajID
-        self.bounds = bounds
-        
-    def __str__(self):
-        return "Subtraj TrajID %d ; bounds (%d, %d)" % (self.trajID, self.bounds[0], self.bounds[1])
-        
-    def __eq__(self, other):
-        return (self.trajID==other.trajID and self.bounds[0]==other.bounds[0] and self.bounds[1]==other.bounds[1])
-        
-    def __hash__(self):
-        return hash((self.trajID, self.bounds[0], self.bounds[1]))
-
-
-
 class pathlet2(object):
     """ A class representing a pathlet
         
@@ -146,7 +127,7 @@ class pathlet2(object):
                               trajectory points.
             pt_array
             id: pathlet id
-            id,trajIDs: list of traj ids in form: [trajID1,trajID2,...]
+            trajIDs: list of traj ids in form: [trajID1,trajID2,...]
             parent=None
     """
     
@@ -203,8 +184,25 @@ class pathlet2(object):
 
 
 
+class superPath(object):
+    """ pathlet combining a list of paths that are connected
+    """
+    def __init__(self, id,pt_array,bounds):
+        self.id = id
+        self.pt_array = pt_array
+        self.bounds = bounds
 
+    
 
+    def extendPath(self,new_pt_array):
+        """ extend path and bounds accordingly"""
+        self.pt_array = np.concatenate((self.pt_array, new_pt_array), axis=0)
+        self.bounds = (self.bounds[0],self.bounds[0] + len(self.pt_array))
+
+    def __str__(self):
+        """ Return string to be output while printing a pathlet object. """
+        return "Pathlet id %d ; bounds (%d, %d)" % (self.id, self.bounds[0], self.bounds[1])
+        
 
 
 class Panel(object):
@@ -255,12 +253,13 @@ class Stc(object):
         
     """
     
-    def __init__(self,c1,c2,c3,c4,panel,pathlets,assignments,metric="l1",superPths=[]):
+    def __init__(self,c1,c2,c3,c4,panel,pathlets,assignments,metric="l1",superPths=[],c5=0):
         """ Default constructor with dummy initialization values. """
         self.c1 = c1
         self.c2 = c2
         self.c3 = c3
         self.c4 = c4
+        self.c5 = c5
         
         self.pathlets = pathlets #pathlet list. A list of pathlets [pth1,pth2,...]. Each pathlet contains list of trajs attached to it
         self.assignments = assignments #for each traj - assign a list indicating subtrajectories assigned to each cluster: {trajID: [pth1, pth2, ...]}
@@ -274,20 +273,25 @@ class Stc(object):
         
     def __str__(self):
         """ Return string to be output while printing a pt object. """
-        return "Pathlets: %a, Total cost: %a" % (self.unique_pathlets(),self.loss())
+        return "SuperPathlets: %a, Total cost: %a" % (self.totalSuperpaths(),self.loss())
 
-    def updateParams(self,c1_,c2_,c3_,c4_):
+    def updateParams(self,c1_,c2_,c3_,c4_,c5_=0):
         """ update model parameters """
         self.c1 = c1_
         self.c2 = c2_
         self.c3 = c3_
         self.c4 = c4_
+        self.c5 = c5_
 
     
-    def unique_pathlets(self):
-        """ return unique number of pathlets"""
-        unique_pathlets = [pth for pth in self.pathlets if pth.parent is None] # remove those who have parents
-        return(len(unique_pathlets))
+    def totalSuperpaths(self):
+        """ return total number of superpaths"""
+        total_superpaths = [pth for pth in self.pathlets if pth.parent is None] # remove those who have parents
+        return(len(total_superpaths))
+
+    def totalPaths(self):
+        """ return total number of paths """
+        return(len(self.pathlets))
 
     def switches(self):
         switches = 0
@@ -306,7 +310,7 @@ class Stc(object):
     def loss(self):
         
         ### total unique paths
-        total_paths = self.unique_pathlets()
+        total_superpaths = self.totalSuperpaths()
 
         #frac uncovered points
         frac_uncovered_points = sum([  (1- traj.coverage()) for traj in self.panel.trajs])
@@ -322,7 +326,10 @@ class Stc(object):
         #switches
         switches = self.switches()
 
-        mu = (self.c1*(total_paths)) + (self.c2*(frac_uncovered_points)) + (self.c3*(quality)) + self.c4*switches
+        # total pathlets
+        total_paths = self.totalPaths()
+
+        mu = (self.c1*(total_superpaths)) + (self.c2*(frac_uncovered_points)) + (self.c3*(quality)) + self.c4*switches + self.c5*total_paths
         #print("paths: %d"  %(total_paths))
         #print("frac uncovered: %d" % (frac_uncovered_points))
         #print("quality: %d"  %(quality)) 
@@ -338,7 +345,7 @@ class Stc(object):
         self.pathlets.append(new_pathlet)
 
     def mergePathlets(self,pth_tuple_list,bounds):
-        """ merges extend pths into new period
+        """ merges extend pths into new period - used in greedy 1
 
         Args:
             pth_tuple: list of pairs of paths to merge [(pth1.1,pth2.1),(pth1.2,pth2.2),...] 
@@ -359,7 +366,7 @@ class Stc(object):
 
         unassigned_trajs= []
 
-        new_pth_id_counter = bounds[0]
+        new_pth_id_counter = (self.totalPaths()*bounds[0]) #ensure no counting overlap
         for pth_tuple in pth_tuple_list:
             left_path = pth_tuple[0]
             right_path = pth_tuple[1]
@@ -406,7 +413,6 @@ class Stc(object):
                 current_cost = math.inf
                 current_path = 1
             for pth in candidate_paths:
-                pth.bounds[0]
                 pth_path = pth.pt_array[(bounds[0] - pth.bounds[0]): (bounds[0] - pth.bounds[0]) + bounds[1]]
                 cost = self.apply_metric(traj_path,pth_path)
                 if cost < current_cost:
@@ -414,6 +420,123 @@ class Stc(object):
                     current_path = pth
             traj.addPathlet(current_path) #add pathlet to traj
             current_path.addTrajIds([traj.trajID]) #add traj to pathlet
+
+
+    def mergePathlets2(self,left_paths,right_paths,bounds):
+        """ - used in greedy 2
+        1) extrapolate olds paths
+        2) out of all paths, (old extended ones, and new ones, see which is best to add)
+        3) update assingments
+        
+         """
+        #1 and 2) extrapolate old paths, calculate marginal cost of new and old paths
+        
+        old_extrapolated_path_candidates = []
+        marginal_benefits = []
+
+        counter_id = (self.totalPaths()*bounds[0])
+        for old_pth in left_paths:
+            ### setup new path
+            oe_pt_array = 1
+            trajIDs = old_pth.trajIDs
+            raw_trajs = [ self.panel.raw_trajs[i] for i in trajIDs] #extract raw trajectories
+            oe_pt_array = np.array([ np.median(   [rt[i] for rt in raw_trajs]    ) for i in range(bounds[0],bounds[1])])
+            oe_path = pathlet2(bounds = bounds ,pt_array = oe_pt_array,id=counter_id,trajIDs=trajIDs,parent=old_pth)
+            old_extrapolated_path_candidates.append(oe_path)
+            counter_id = counter_id + 1
+
+            ### store cost
+            raw_trajs_inbounds = [ self.panel.raw_trajs[i][bounds[0]:bounds[1]] for i in trajIDs] #extract raw trajectories
+            total_dist = sum( [self.apply_metric(np.array(oe_path.pt_array),np.array(a)) for a in raw_trajs_inbounds  ] )
+            cost = self.c3*total_dist +  self.c5 
+            marginal_benefits.append([cost/len(trajIDs),oe_path])
+
+        new_path_candidates = right_paths
+
+        for new_pth in new_path_candidates:
+            trajIDs = new_pth.trajIDs
+            raw_trajs_inbounds = [ self.panel.raw_trajs[i][bounds[0]:bounds[1]] for i in trajIDs]
+            total_dist = sum( [self.apply_metric(np.array(new_pth.pt_array),np.array(a)) for a in raw_trajs_inbounds  ] )
+            cost = self.c1 + self.c3*total_dist + (self.c4)*(len(trajIDs)) + self.c5 #cost is cost of new superpath + points that move to it + new path
+            marginal_benefits.append([cost/len(trajIDs),new_pth])
+
+        marginal_benefits = sorted(marginal_benefits, key=lambda x: x[0])
+
+        #3) add to pths until 
+        # we don't want to add more clusters than the max of k and oe. 
+        # reduce cluster size if we add all of k first
+
+        #initial parameters
+        chosen_pths = []
+        left_lim = len(right_paths)
+        left_count = 0
+        right_lim = len(left_paths)
+        right_count = 0
+        total_lim = max(left_lim,right_lim)
+        total_count = 0
+        trajs_added = []
+        overlap_threshold = (2/(total_lim)) # the more sets, the lower (and stricter) the threshold (may want to adapt this)
+
+        for pick in marginal_benefits:
+            pth = pick[1]
+
+            iter_overlap = overlap(pth.trajIDs,trajs_added)    #comp similarity trajs added so far : prop of trajs already covered 
+            if iter_overlap < overlap_threshold: #check if overlap is below the threshold
+                chosen_pths.append(pth)
+                trajs_added.extend(pth.trajIDs)
+                #add counts
+                total_count = total_count + 1
+                if pth in right_paths:
+                    right_count = right_count + 1
+                else:
+                    left_count = left_count + 1
+            else:
+                #print("too much overlap, skipping")
+                pass
+
+            #break if we reach any of the following limits
+            if left_count >= left_lim:
+                break
+            elif right_count >= right_lim:
+                break
+            elif total_count >= total_lim:
+                break
+        
+        #4) add new paths to res
+        #a) remove existing pths from panel and trajs
+        for right_path in right_paths:
+            self.pathlets.remove(right_path)
+            for traj_id in right_path.trajIDs:
+                traj = self.panel.trajs[traj_id] #these match (have confirmed)
+                traj.removePathlet(right_path)
+        
+        #add new paths
+        for chosen_pth in chosen_pths:
+            #print(chosen_pth)
+            self.addPathlet(chosen_pth)
+
+        #b) then for each traj, add to their nearest traj
+
+        for traj in self.panel.trajs:
+            current_cost = math.inf
+            current_path = 1
+            traj_path = traj_path = traj.pt_array[bounds[0]:bounds[1]]
+            for pth in chosen_pths:
+                pth_path = pth.pt_array
+                cost = self.apply_metric(np.array(traj_path),np.array(pth_path))
+                if pth.parent in traj.assignments: #cost fall if same as parent (to be consistent with greedy 1)
+                    cost = cost - self.c4
+                if cost < current_cost:
+                    current_cost = cost
+                    current_path = pth
+
+            traj.addPathlet(current_path)
+            current_path.addTrajIds([traj.trajID])
+        
+        #3) add each pathlet to assignments
+            
+
+
 
     def genSuperPathlets(self):
         ### merge pathlets that are linked to each other (i.e. have the same parent)
@@ -436,29 +559,4 @@ class Stc(object):
         
         self.superPths = super_pths
         
-
-
-
-class superPath(object):
-    """ pathlet combining a list of paths that are connected
-    """
-    def __init__(self, id,pt_array,bounds):
-        self.id = id
-        self.pt_array = pt_array
-        self.bounds = bounds
-
-    
-
-    def extendPath(self,new_pt_array):
-        """ extend path and bounds accordingly"""
-        self.pt_array = np.concatenate((self.pt_array, new_pt_array), axis=0)
-        self.bounds = (self.bounds[0],self.bounds[0] + len(self.pt_array))
-
-    def __str__(self):
-        """ Return string to be output while printing a pathlet object. """
-        return "Pathlet id %d ; bounds (%d, %d)" % (self.id, self.bounds[0], self.bounds[1])
-        
-
-
-
 

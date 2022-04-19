@@ -2,10 +2,11 @@ from clusteringAlgos import *
 from models import *
 
 import pandas as pd
+import random
 
 
 df_abnormal_returns = pd.read_csv("data/abnormal_returns_data.csv")
-start_date = 3000
+start_date = 2000
 df_preproc = df_abnormal_returns
 df = df_preproc[df_preproc["date_id"] >= start_date]
 company_names = list(df.columns)[2:]
@@ -14,9 +15,12 @@ for i in company_names:
     trajectories.append(list(df[i]))
 traj_panel = Panel(trajObj_list = trajectories,start_time=1)
 
-C1,C2,C3,C4 = 500,1,1,1
-K_LIST = [5]
-SEG_LIST = [4]
+C1,C2,C3,C4,C5 = 5000,1,1,1,1
+K_LIST = [5,10,15,20,25]
+SEG_LIST = [2,4,6,8,10]
+
+random.seed(1)
+
 
 """
 res_stc_n0 = naive_0(PANEL = traj_panel,
@@ -30,17 +34,18 @@ print("loss N1",str(res_stc_n0))
 """
 
 
-"""
+
 res_stc_n1 = naive_1(PANEL = traj_panel,
               k_list= K_LIST,
               c1=C1,
               c2=C2,
               c3=C3,
-              c4=C4)
+              c4=C4,
+              c5=C5)
 
+print("n1")
+print(str(res_stc_n1))
 
-print("loss N1",str(res_stc_n1))
-"""
 
 """
 res_stc_n2 = naive_2(PANEL = traj_panel,
@@ -52,7 +57,6 @@ res_stc_n2 = naive_2(PANEL = traj_panel,
 print("loss N2" ,str(res_stc_n2.loss()))
 """
 
-"""
 res_stc_n3 = naive_3(PANEL = traj_panel,
                      k_list= K_LIST,
                      seg_list = SEG_LIST, 
@@ -63,21 +67,50 @@ res_stc_n3 = naive_3(PANEL = traj_panel,
                      greedy_in_period=False
                      )
 
+print("n3")
 print(str(res_stc_n3))
 
-for i in res_stc_n3.superPths:
-    print(i)
-"""
+#for i in res_stc_n3.superPths:
+#    print(i)
 
-res_stc_g1 = greedy1(PANEL = traj_panel,
+
+res_stc_g1 = greedy1_1(PANEL = traj_panel,
                      k_list= K_LIST,
                      seg_list = SEG_LIST, 
                      c1=C1,
                      c2=C2,
                      c3=C3,
-                     c4=C4)
+                     c4=C4,
+                     c5=C5)
 
-
+print("g1")
 print(str(res_stc_g1))
+#for i in res_stc_g1.pathlets:
+#    print(i)
 
+res_stc_g2 = greedy2(PANEL = traj_panel,
+                     k_list= K_LIST,
+                     seg_list = SEG_LIST, 
+                     c1=C1,
+                     c2=C2,
+                     c3=C3,
+                     c4=C4,
+                     c5=C5)
 
+print("g2")
+print(str(res_stc_g2))
+
+#for i in res_stc_g2.pathlets:
+#    print(i)
+
+res_stc_g3 = greedy3(PANEL = traj_panel,
+                     k_list= K_LIST,
+                     seg_list = SEG_LIST, 
+                     c1=C1,
+                     c2=C2,
+                     c3=C3,
+                     c4=C4,
+                     c5=C5)
+
+print("g3")
+print(str(res_stc_g3))
