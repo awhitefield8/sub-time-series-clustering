@@ -258,7 +258,7 @@ def greedy1(PANEL,
     if len(k_list) > 1:
         return("please specify a single number of cluster given a period in time")
 
-    res = naive_3(copy.deepcopy(PANEL),
+    res = naive_3(copy.deepcopy(PANEL), #want to optimise number of periods
             k_list, #note that this will only output a single k per round
             seg_list,
             c1=0,
@@ -295,18 +295,22 @@ def greedy1(PANEL,
             sim_matrix = np.array( [[1.0] * len(pathlets_end) for i in range(len(pathlets_start))] )
             for s in range(len(pathlets_start)):
                 for e in range(len(pathlets_end)):
-                    sim_matrix[s,e] = round(comp_diff(pathlets_start[s].trajIDs ,pathlets_end[e].trajIDs),2)
+                    sim_matrix[s,e] = round(comp_diff(pathlets_start[s].trajIDs ,pathlets_end[e].trajIDs,type="Jaccard"),3)
 
             #add clusters to priority queue in order how good of the match they have
+            #print(sim_matrix)
             matches = list()
             for i in range(len(pathlets_start)):
-                closest_match_score = copy.deepcopy(min(sim_matrix[i]))
-                closest_match_id = sim_matrix[i].argmin()
-                if closest_match_score<0.90: #only merge if close enough match <<<<<< this is an important parameter
+                closest_match_score = copy.deepcopy(max(sim_matrix[i]))
+                closest_match_id = sim_matrix[i].argmax()
+                if closest_match_score>0.50: #only merge if close enough match <<<<<< this is an important parameter
                     #print("sucess: match score: " + str(closest_match_score))
                     matches.append( (i,closest_match_id) )
-                    sim_matrix[:,closest_match_id] = 1   #add weights to column just used
+                    sim_matrix[:,closest_match_id] = 0   #add weights to column just used
                     #print(sim_matrix)
+                else:
+                    #print("no match - not close enough: match score: " + str(closest_match_score))
+                    pass
             
             #merge clusters if the match is good enough
             #print(matches)
@@ -389,7 +393,7 @@ def greedy2(PANEL,
             c4=0,
             greedy_in_period = True) #run naive 3
 
-    res.updateParams(c1_=c1,c2_=c2,c3_=c3,c4_=c4) # update parameters 
+    res.updateParams(c1_=c1,c2_=c2,c3_=c3,c4_=c4,c5_=c5) # update parameters 
 
     pathlet_bounds = copy.deepcopy(list(set([ i.bounds for i in res.pathlets]))) #list of bounds for pathlets to consider, deep copy and bounds may change
     pathlet_bounds.sort() # sort list
@@ -417,7 +421,7 @@ def greedy2(PANEL,
             res.mergePathlets2(left_paths=pathlets_start,right_paths=pathlets_end,bounds = bounds_end)
 
         #finally, generate superpaths
-        res.genSuperPathlets()
+    res.genSuperPathlets()
                 
     return(res)
 
@@ -460,6 +464,8 @@ def greedy3(PANEL,
         if stc_iter.loss() < current_loss:
             current_loss = stc_iter.loss() 
             best_stc = stc_iter
+    
+    best_stc.genSuperPathlets()
     
     return(best_stc)
 

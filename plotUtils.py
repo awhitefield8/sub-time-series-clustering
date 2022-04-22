@@ -58,14 +58,33 @@ def plot_stc(stc_obj):
     pth_df = pth_to_df(pathlets)
     
     # identify breaks
-    breaks = list(set( [pth.bounds[1] for pth in stc_obj.superPths]))
-    breaks.remove(stc_obj.panel.T) #remove final object
-    
+    breaks1 = list(set( [pth.bounds[1] for pth in stc_obj.superPths]))
+    breaks2 = list(set( [pth.bounds[0] for pth in stc_obj.superPths]))
+    breaks = breaks1 + breaks2
     return({"traj_df":traj_df,
             "pth_df":pth_df,
             "breaks": breaks})
     
     
+
+### for dfs
+
+
+def df_to_plotdf(df,colnames):
+    """
+    takes in a df and converts to one that is easy to plot
+    
+    """
+
+    
+    df_plot = pd.melt(df,
+                  id_vars=["date"],
+                  value_vars=colnames,
+                  var_name = "id")
+    df_plot["group"] = 1
+        
+    return(df_plot)
+        
 
 
 
@@ -99,3 +118,22 @@ if __name__ == "__main__":
     print(plot_dfs["pth_df"])
 
 
+
+
+### plotting for list of list trajectories
+
+
+def traj_list_to_df(trajs,start_time=0):
+    """ list of list trajectories to df """
+
+    df_output = pd.DataFrame(columns = ['new_id', 'date_id', 'value','id','cluster'])
+    
+    counter = 1
+    pth_id = 1
+    for traj in trajs:
+        for time_id in range(len(traj)):
+            new_row = {'new_id':counter, 'date_id':time_id  + start_time , 'value': traj[time_id],'id': pth_id,'cluster':1}
+            df_output = df_output.append(new_row, ignore_index = True)
+            counter = counter + 1  
+        pth_id = pth_id + 1
+    return(df_output)

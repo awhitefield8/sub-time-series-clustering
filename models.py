@@ -91,7 +91,7 @@ class traj(object):
         prev_pth = None
         for pth in self.assignments:
             if prev_pth is None:
-                s = s+1
+                pass #no switches if always in a cluster
             else:
                 if pth.parent != prev_pth:
                     s = s + 1
@@ -178,9 +178,9 @@ class pathlet2(object):
         """ add a parent to the pathlet """
         self.parent = self.new_parent
 
-    def addChild(self,child):
+    def addChild(self,new_child):
         """ a child to pathlet """
-        self.child = child #currently only single children
+        self.child = new_child #currently only single children
 
 
 
@@ -191,6 +191,7 @@ class superPath(object):
         self.id = id
         self.pt_array = pt_array
         self.bounds = bounds
+
 
     
 
@@ -298,7 +299,7 @@ class Stc(object):
         for traj in self.panel.trajs:
             ### calculate number of pthlets each traj is in (want to punish lots of switches)
             switches = switches + traj.switches()
-            return(switches)
+        return(switches)
 
 
     def apply_metric(self,a,b):
@@ -475,21 +476,30 @@ class Stc(object):
         total_lim = max(left_lim,right_lim)
         total_count = 0
         trajs_added = []
-        overlap_threshold = (2/(total_lim)) # the more sets, the lower (and stricter) the threshold (may want to adapt this)
+        overlap_threshold = (1/(total_lim)) # the more sets, the lower (and stricter) the threshold (may want to adapt this)
 
         for pick in marginal_benefits:
-            pth = pick[1]
+            pth = pick[1] #pick second object (the fisrt is score)
 
             iter_overlap = overlap(pth.trajIDs,trajs_added)    #comp similarity trajs added so far : prop of trajs already covered 
             if iter_overlap < overlap_threshold: #check if overlap is below the threshold
                 chosen_pths.append(pth)
-                trajs_added.extend(pth.trajIDs)
+                trajs_added.extend(pth.trajIDs)                
                 #add counts
                 total_count = total_count + 1
                 if pth in right_paths:
+                    #print("in right")
                     right_count = right_count + 1
                 else:
+                    #print("in left")
                     left_count = left_count + 1
+                    #if an old path - add child
+                    parent_pth = pth.parent
+                    if parent_pth.child is not None:
+                        print("error - trying to assing child to parent with child")
+                    parent_pth.addChild(pth)
+                    #print(parent_pth)
+                    #print(parent_pth.child)
             else:
                 #print("too much overlap, skipping")
                 pass
