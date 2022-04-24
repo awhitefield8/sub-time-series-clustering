@@ -76,9 +76,9 @@ def df_to_plotdf(df,colnames):
     
     """
 
-    
+    counter = 1
     df_plot = pd.melt(df,
-                  id_vars=["date"],
+                  id_vars=["date_id"],
                   value_vars=colnames,
                   var_name = "id")
     df_plot["group"] = 1

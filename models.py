@@ -166,6 +166,10 @@ class pathlet2(object):
 
     def addTrajIds(self,trajIDs):
         self.trajIDs.extend(trajIDs)
+        #self.trajIDs = list(set(self.trajIDs)) #ensure unique
+
+    def removeTrajIds(self):
+        self.trajIDs = []
 
     def updatePointArray(self,pt_array):
         """ updates point array, and in turn bounds
@@ -187,25 +191,25 @@ class pathlet2(object):
 class superPath(object):
     """ pathlet combining a list of paths that are connected
     """
-    def __init__(self, id,pt_array,bounds):
+    def __init__(self, id,pt_array,bounds,trajIDs=None):
         self.id = id
         self.pt_array = pt_array
         self.bounds = bounds
-
-
-    
+        self.trajIDs = trajIDs
 
     def extendPath(self,new_pt_array):
         """ extend path and bounds accordingly"""
         self.pt_array = np.concatenate((self.pt_array, new_pt_array), axis=0)
         self.bounds = (self.bounds[0],self.bounds[0] + len(self.pt_array))
 
+    def supAddtrajIDs(self,trajIDs):
+        self.trajIDs.extend(trajIDs)
+
     def __str__(self):
         """ Return string to be output while printing a pathlet object. """
-        return "Pathlet id %d ; bounds (%d, %d)" % (self.id, self.bounds[0], self.bounds[1])
+        return "SuperPth id %d ; bounds (%d, %d); Trajs %d:" % (self.id, self.bounds[0], self.bounds[1], len(self.trajIDs))
+
         
-
-
 class Panel(object):
     """ A list of time series lists
 
@@ -287,8 +291,8 @@ class Stc(object):
     
     def totalSuperpaths(self):
         """ return total number of superpaths"""
-        total_superpaths = [pth for pth in self.pathlets if pth.parent is None] # remove those who have parents
-        return(len(total_superpaths))
+        #total_superpaths = [pth for pth in self.pathlets if pth.parent is None] # this won't work as we want to exclude empty ones
+        return(len(self.superPths))
 
     def totalPaths(self):
         """ return total number of paths """
@@ -308,25 +312,25 @@ class Stc(object):
         else:
             print("unusable metric")
 
-    def loss(self):
-        
-        ### total unique paths
-        total_superpaths = self.totalSuperpaths()
-
-        #frac uncovered points
-        frac_uncovered_points = sum([  (1- traj.coverage()) for traj in self.panel.trajs])
-
-        ### quality
+    def quality_of_fit(self):
         quality = 0
         for traj in self.panel.trajs:
             ### calculate loss for each traj
             for pth in traj.assignments: # iterates through list of form: [pth1,pth2,...]
                 bounds = pth.bounds
-                quality = quality + self.apply_metric(traj.pt_array[bounds[0]:bounds[1]],pth.pt_array) #add 1 to upper bound
+                quality = quality + self.apply_metric(traj.pt_array[bounds[0]:bounds[1]],pth.pt_array) 
+        return(quality)
 
+    def loss(self):
+        
+        ### total unique paths
+        total_superpaths = self.totalSuperpaths()
+        #frac uncovered points
+        frac_uncovered_points = sum([  (1- traj.coverage()) for traj in self.panel.trajs])
+        ### quality
+        quality = self.quality_of_fit()
         #switches
         switches = self.switches()
-
         # total pathlets
         total_paths = self.totalPaths()
 
@@ -387,14 +391,11 @@ class Stc(object):
             self.pathlets.remove(right_path)
             
         
+        candidate_paths = [ i for i in self.pathlets if i.bounds[1] == bounds[1] ] #all candiate path end at end of the right period
+
         for traj in unassigned_trajs:
             #assign to closest trajectory (trading off proximity and previous assignment)
             traj_path = traj.pt_array[bounds[0]:bounds[1]]
-            candidate_paths = [ i for i in self.pathlets if i.bounds[1] == bounds[1] ] #all candiate path end at end of the right period
-
-            #print("candidate paths")
-            #for i in candidate_paths:
-            #    print(i)
 
             # next find if previous path exists in this period
             existing_assignments = traj.assignments
@@ -402,9 +403,7 @@ class Stc(object):
             parent_obj = prev_assignment[0]
             prev_path = [pth for pth in self.pathlets if pth.parent == parent_obj]
 
-            #print("prev paths")
-            #for i in prev_path:
-            #    print(i)
+
 
             if len(prev_path) > 0:
                 current_path = prev_path[0]
@@ -440,17 +439,22 @@ class Stc(object):
             ### setup new path
             oe_pt_array = 1
             trajIDs = old_pth.trajIDs
-            raw_trajs = [ self.panel.raw_trajs[i] for i in trajIDs] #extract raw trajectories
-            oe_pt_array = np.array([ np.median(   [rt[i] for rt in raw_trajs]    ) for i in range(bounds[0],bounds[1])])
-            oe_path = pathlet2(bounds = bounds ,pt_array = oe_pt_array,id=counter_id,trajIDs=trajIDs,parent=old_pth)
-            old_extrapolated_path_candidates.append(oe_path)
-            counter_id = counter_id + 1
+            #print("len old traj ids:", str(len(trajIDs)) )
 
-            ### store cost
-            raw_trajs_inbounds = [ self.panel.raw_trajs[i][bounds[0]:bounds[1]] for i in trajIDs] #extract raw trajectories
-            total_dist = sum( [self.apply_metric(np.array(oe_path.pt_array),np.array(a)) for a in raw_trajs_inbounds  ] )
-            cost = self.c3*total_dist +  self.c5 
-            marginal_benefits.append([cost/len(trajIDs),oe_path])
+            if len(trajIDs) == 0:
+                print("no trajs in path, setting infinite cost")
+            else:
+                raw_trajs = [ self.panel.raw_trajs[i] for i in trajIDs] #extract raw trajectories
+                oe_pt_array = np.array([ np.median(   [rt[i] for rt in raw_trajs]    ) for i in range(bounds[0],bounds[1])])
+                oe_path = pathlet2(bounds = bounds ,pt_array = oe_pt_array,id=counter_id,trajIDs=[],parent=old_pth)  #don't want to double assing trajectories
+                old_extrapolated_path_candidates.append(oe_path)
+                counter_id = counter_id + 1
+
+                ### store cost
+                raw_trajs_inbounds = [ self.panel.raw_trajs[i][bounds[0]:bounds[1]] for i in trajIDs] #extract raw trajectories
+                total_dist = sum( [self.apply_metric(np.array(oe_path.pt_array),np.array(a)) for a in raw_trajs_inbounds  ] )
+                cost = self.c3*total_dist +  self.c5 
+                marginal_benefits.append([cost/(1+len(trajIDs)),oe_path]) #1+ to avoid dividing by zero
 
         new_path_candidates = right_paths
 
@@ -459,7 +463,7 @@ class Stc(object):
             raw_trajs_inbounds = [ self.panel.raw_trajs[i][bounds[0]:bounds[1]] for i in trajIDs]
             total_dist = sum( [self.apply_metric(np.array(new_pth.pt_array),np.array(a)) for a in raw_trajs_inbounds  ] )
             cost = self.c1 + self.c3*total_dist + (self.c4)*(len(trajIDs)) + self.c5 #cost is cost of new superpath + points that move to it + new path
-            marginal_benefits.append([cost/len(trajIDs),new_pth])
+            marginal_benefits.append([cost/(1+len(trajIDs)),new_pth]) #1+ to avoid dividing by zero
 
         marginal_benefits = sorted(marginal_benefits, key=lambda x: x[0])
 
@@ -496,7 +500,7 @@ class Stc(object):
                     #if an old path - add child
                     parent_pth = pth.parent
                     if parent_pth.child is not None:
-                        print("error - trying to assing child to parent with child")
+                        print("error - trying to assign child to parent with child")
                     parent_pth.addChild(pth)
                     #print(parent_pth)
                     #print(parent_pth.child)
@@ -514,12 +518,13 @@ class Stc(object):
         
         #4) add new paths to res
         #a) remove existing pths from panel and trajs
-        for right_path in right_paths:
-            self.pathlets.remove(right_path)
+        for right_path in right_paths:                        
+            self.pathlets.remove(right_path) # remove right path - will only add ones that are chosen + don't want to double count them
             for traj_id in right_path.trajIDs:
                 traj = self.panel.trajs[traj_id] #these match (have confirmed)
                 traj.removePathlet(right_path)
-        
+            right_path.removeTrajIds() #remove trajIDs assigned to them - so that we don't double count
+
         #add new paths
         for chosen_pth in chosen_pths:
             #print(chosen_pth)
@@ -542,9 +547,7 @@ class Stc(object):
 
             traj.addPathlet(current_path)
             current_path.addTrajIds([traj.trajID])
-        
-        #3) add each pathlet to assignments
-            
+                    
 
 
 
@@ -558,15 +561,19 @@ class Stc(object):
         counter_id = 1
         for base_pth in base_pths:
             #initialise superpath
-            super_pth = superPath(id=counter_id,pt_array=base_pth.pt_array,bounds=base_pth.bounds)
+            super_pth = superPath(id=counter_id,pt_array=base_pth.pt_array,bounds=base_pth.bounds,trajIDs=copy.deepcopy(base_pth.trajIDs))
             #add on children
             child = base_pth.child
+            #add trajIDs
             while child is not None:
                 super_pth.extendPath(child.pt_array)
+                super_pth.supAddtrajIDs(child.trajIDs)
                 child = child.child #add new child
             counter_id = counter_id + 1
-            super_pths.append(super_pth)
-        
+            if len(super_pth.trajIDs) > 0 :
+                super_pths.append(super_pth) #do
+            else:
+                print("emptry superpath, not including")
         self.superPths = super_pths
         
 

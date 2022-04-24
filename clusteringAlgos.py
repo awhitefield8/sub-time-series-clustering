@@ -303,7 +303,7 @@ def greedy1(PANEL,
             for i in range(len(pathlets_start)):
                 closest_match_score = copy.deepcopy(max(sim_matrix[i]))
                 closest_match_id = sim_matrix[i].argmax()
-                if closest_match_score>0.50: #only merge if close enough match <<<<<< this is an important parameter
+                if closest_match_score>0.30: #only merge if close enough match <<<<<< this is an important parameter
                     #print("sucess: match score: " + str(closest_match_score))
                     matches.append( (i,closest_match_id) )
                     sim_matrix[:,closest_match_id] = 0   #add weights to column just used
@@ -323,8 +323,8 @@ def greedy1(PANEL,
                 #print(PTH_TUPLE_LIST)
                 res.mergePathlets(pth_tuple_list=PTH_TUPLE_LIST,bounds=bounds_end)
             
-        #finally, generate superpaths
-        res.genSuperPathlets()
+    #finally, generate superpaths
+    res.genSuperPathlets()
                 
     return(res)
 

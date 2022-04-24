@@ -32,7 +32,7 @@ def comp_diff(s1,s2,type="Jaccard"):
 
 
 def overlap(a,b):
-    """ exports what proportion of a is in b
+    """ exports what proportion of a is in b. If none of a is in b, return 0, if all, return 1
     Args:
         a,b: two lists
 
@@ -44,6 +44,9 @@ def overlap(a,b):
 
     a_in_b = [i for i in a_clean if i in b_clean]
 
-    return(len(a_in_b)/len(a))
+    if len(a) == 0:
+        return(0)
+    else:
+        return(len(a_in_b)/len(a))
 
 
