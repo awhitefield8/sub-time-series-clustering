@@ -1,10 +1,15 @@
 # Sub-time-series clustering
 
+![HM](./img/intro.png)
+
+
 Sub-time-series clustering (stsc) attempts to find clusters of time-series at given intervals of time. Unlike time-series clustering, the clustering is allowed to change through time to better fit the data. This repository provides models and functions that approximation optimal stsc.
+
+
 
 ## How to use 
 
-The file: test_greedy.ipynb contains a notebook that uses greedy3, the main algorithm proposed. 
+The file: test.ipynb contains a notebook that uses greedy2, the main algorithm proposed. The notebook also showcases the plotting functionality contained to the plotUtils file.
 
 ## References
 
